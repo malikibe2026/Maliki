@@ -31,8 +31,11 @@ jobs:
 
       - name: Pasang komponen Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager | head -n 1)"
+          echo "Menggunakan: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Sediakan Gradle 8.14
         uses: gradle/actions/setup-gradle@v4
