@@ -29,8 +29,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Sediakan Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Pasang komponen Android SDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: Sediakan Gradle 8.14
         uses: gradle/actions/setup-gradle@v4
