@@ -1,14 +1,14 @@
 (() => {
   'use strict';
 
-  const { h, api, SHAPES } = window.Kuiz;
+  const { h, api, openStream, download, SHAPES } = window.Kuiz;
   const app = document.getElementById('app');
   const STORE_KEY = 'kuiz-host';
 
   let room = null;      // { code, hostToken, quizTitle }
   let state = null;     // snapshot terkini dari pelayan
   let offset = 0;       // jam pelayan - jam peranti
-  let es = null;
+  let closeStream = null;
   let timerId = null;
   let timerFill = null;
   let timerText = null;
@@ -26,27 +26,31 @@
   function forgetRoom() {
     room = null;
     state = null;
-    if (es) { es.close(); es = null; }
+    if (closeStream) { closeStream(); closeStream = null; }
     try { sessionStorage.removeItem(STORE_KEY); } catch { /* abaikan */ }
     render();
   }
 
   function connect() {
-    if (es) es.close();
-    const url = `/api/rooms/${room.code}/stream?audience=host&token=${encodeURIComponent(room.hostToken)}`;
-    es = new EventSource(url);
-    es.onmessage = (e) => {
-      state = JSON.parse(e.data);
-      offset = state.now - Date.now();
-      render();
-    };
-    es.onerror = () => {
-      // EventSource sambung semula sendiri. Jika ditutup oleh pelayan, bilik tiada / token salah.
-      if (es.readyState === EventSource.CLOSED) {
-        es = null;
+    if (closeStream) closeStream();
+    closeStream = openStream(
+      `/api/rooms/${room.code}/stream`,
+      { 'X-Host-Token': room.hostToken },
+      (data) => {
+        state = data;
+        offset = state.now - Date.now();
+        render();
+      },
+      () => {
+        closeStream = null;
         showError('Bilik tidak lagi wujud atau token tidak sah. Sila cipta bilik baru.');
-      }
-    };
+      },
+    );
+  }
+
+  function exportCsv() {
+    download(`/api/rooms/${room.code}/export`, { 'X-Host-Token': room.hostToken }, `kuiz-${room.code}.csv`)
+      .catch((err) => alert(err.message));
   }
 
   let errorMsg = '';
@@ -68,7 +72,7 @@
 
   async function control(action) {
     try {
-      await api(`/api/rooms/${room.code}/control`, { token: room.hostToken, action });
+      await api(`/api/rooms/${room.code}/control`, { action }, { 'X-Host-Token': room.hostToken });
     } catch (err) {
       alert(err.message);
     }
@@ -205,7 +209,7 @@
               h('strong', {}, String(p.score))))
             : h('p', { class: 'muted center' }, 'Tiada peserta.'))),
       h('footer', { class: 'controls' },
-        h('span', { class: 'muted' }, ''),
+        h('button', { class: 'btn-secondary', onclick: exportCsv }, 'Muat turun keputusan (CSV)'),
         h('button', { class: 'btn-primary', onclick: forgetRoom }, 'Cipta bilik baru')),
     ];
   }

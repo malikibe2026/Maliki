@@ -38,8 +38,30 @@ Mulakan semula pelayan selepas menukar `quiz.json`.
 - Jawapan betul: 1000 mata jika dijawab serta-merta, turun secara linear hingga 500 mata pada saat akhir.
 - Jawapan salah atau tidak menjawab: 0 mata.
 
-## Nota
-- Bilik disimpan dalam memori. Jika pelayan dimulakan semula, semua bilik hilang.
+## Eksport keputusan
+Selepas kuiz tamat, host klik **Muat turun keputusan (CSV)**. Fail mengandungi kedudukan, nama, jumlah mata, dan jawapan serta mata bagi setiap soalan. Fail dikodkan UTF-8 dengan BOM supaya Excel papar dengan betul.
+
+## Simpanan keadaan
+- Keadaan bilik disimpan dalam `data/rooms.json` (dicipta automatik, diabaikan oleh git).
+- Jika pelayan di-restart, bilik dipulihkan. Peserta boleh sambung semula dengan telefon yang sama.
+- Soalan yang sedang dibuka semasa restart akan terus didedahkan, kerana pemasa tidak boleh disambung semula.
+- Tukar lokasi simpanan dengan `DATA_DIR=/laluan/lain npm start`.
+
+## Rangkaian dan firewall (penting)
+- Telefon peserta dan komputer host mesti dalam rangkaian Wi-Fi yang sama.
+- Port 3000 mesti dibenarkan oleh firewall komputer host:
+  - Windows: Windows Defender Firewall > Allow an app > benarkan Node.js untuk rangkaian Private, atau cipta peraturan masuk untuk TCP 3000.
+  - macOS: System Settings > Network > Firewall, benarkan Node.
+- Wi-Fi sekolah/pejabat selalunya menyekat komunikasi sesama peranti (client isolation). Jika telefon tidak boleh capai alamat host, minta pentadbir rangkaian benarkan, atau guna hotspot telefon host.
+- Pelayan terikat pada `0.0.0.0` supaya peranti lain boleh masuk. Tukar dengan `HOST=127.0.0.1` jika mahu hanya komputer sendiri.
+
+## Keselamatan
+- Token host dan ID peserta dihantar dalam header HTTP, bukan dalam URL.
+- Gunakan dalam rangkaian yang dipercayai sahaja. Jangan dedahkan ke internet tanpa HTTPS dan pengesahan tambahan.
 - Bilik tanpa aktiviti selama 4 jam akan dipadam.
-- Token host disimpan dalam `sessionStorage` pelayar host dan dihantar dalam URL stream. Gunakan dalam rangkaian yang dipercayai sahaja (LAN sekolah/pejabat), jangan dedahkan ke internet tanpa HTTPS dan pengesahan tambahan.
-- Pelayan terikat pada `0.0.0.0` supaya peserta dalam rangkaian yang sama boleh masuk.
+
+## Ujian
+```bash
+npm test
+```
+Ujian ini menjalankan pelayan sementara dengan 30 peserta serentak, melengkapkan kuiz, menguji eksport CSV, dan menguji restart pelayan.

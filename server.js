@@ -7,7 +7,10 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'rooms.json');
 const QUIZ = JSON.parse(fs.readFileSync(path.join(__dirname, 'quiz.json'), 'utf8'));
 const MAX_POINTS = 1000;
 const ROOM_TTL_MS = 4 * 60 * 60 * 1000; // bilik tanpa aktiviti dipadam selepas 4 jam
@@ -24,7 +27,7 @@ const MIME = {
 
 // ---------- Pengesahan kuiz ----------
 function validateQuiz(quiz) {
-  if (!quiz.questions || !quiz.questions.length) throw new Error('quiz.json tiada soalan');
+  if (!quiz.title || !quiz.questions || !quiz.questions.length) throw new Error('quiz.json tiada tajuk atau soalan');
   quiz.questions.forEach((q, i) => {
     if (!q.text || !Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) {
       throw new Error(`Soalan ${i + 1} tidak sah (perlu 2-4 pilihan)`);
@@ -100,25 +103,31 @@ function cleanName(raw) {
 // ---------- Bilik ----------
 const rooms = new Map();
 
+function newRoomState(code, hostToken) {
+  return {
+    code,
+    phase: 'lobby', // lobby | question | reveal | final
+    hostToken,
+    players: new Map(), // id -> { id, name, score, last }
+    qIndex: -1,
+    qStart: 0,
+    deadline: 0,
+    answers: new Map(), // peserta -> rekod jawapan untuk soalan semasa
+    responses: QUIZ.questions.map(() => null), // indeks soalan -> Map jawapan
+    timer: null,
+    subs: new Set(),
+    lastActive: Date.now(),
+  };
+}
+
 function createRoom() {
   let code;
   do {
     code = String(crypto.randomInt(100000, 1000000));
   } while (rooms.has(code));
-  const room = {
-    code,
-    phase: 'lobby', // lobby | question | reveal | final
-    hostToken: rid(16),
-    players: new Map(), // id -> { id, name, score, last }
-    qIndex: -1,
-    qStart: 0,
-    deadline: 0,
-    answers: new Map(), // playerId -> { choice, correct, points }
-    timer: null,
-    subs: new Set(),
-    lastActive: Date.now(),
-  };
+  const room = newRoomState(code, rid(16));
   rooms.set(code, room);
+  persist();
   return room;
 }
 
@@ -129,8 +138,15 @@ function getRoom(code) {
   return room;
 }
 
-function requireHost(room, token) {
-  if (!safeEqual(token, room.hostToken)) throw new HttpError(403, 'Token host tidak sah');
+function requireHost(room, req) {
+  if (!safeEqual(req.headers['x-host-token'], room.hostToken)) {
+    throw new HttpError(403, 'Token host tidak sah');
+  }
+}
+
+function requirePlayer(room, playerId) {
+  if (!playerId || !room.players.has(playerId)) throw new HttpError(403, 'Peserta tidak sah');
+  return room.players.get(playerId);
 }
 
 function publicPlayers(room) {
@@ -196,6 +212,7 @@ function sendEvent(res, data) {
 
 function broadcast(room) {
   for (const sub of room.subs) sendEvent(sub.res, snapshot(room, sub));
+  persist();
 }
 
 function clearTimer(room) {
@@ -211,6 +228,7 @@ function startQuestion(room, index) {
   room.phase = 'question';
   room.qIndex = index;
   room.answers = new Map();
+  room.responses[index] = room.answers;
   room.qStart = Date.now();
   room.deadline = room.qStart + q.limit * 1000;
   for (const p of room.players.values()) p.last = null;
@@ -246,8 +264,7 @@ function join(room, body) {
 
 function answer(room, playerId, choice) {
   if (room.phase !== 'question') throw new HttpError(409, 'Tiada soalan dibuka sekarang');
-  const player = room.players.get(playerId);
-  if (!player) throw new HttpError(403, 'Peserta tidak sah');
+  const player = requirePlayer(room, playerId);
   if (room.answers.has(playerId)) return; // abaikan hantaran berganda
 
   const q = QUIZ.questions[room.qIndex];
@@ -263,7 +280,7 @@ function answer(room, playerId, choice) {
   const points = correct ? Math.round(MAX_POINTS * (1 - elapsed / (q.limit * 2000))) : 0;
 
   player.score += points;
-  const record = { choice, correct, points };
+  const record = { choice, correct, points, ms: elapsed };
   player.last = record;
   room.answers.set(playerId, record);
 
@@ -292,16 +309,96 @@ function control(room, action) {
   }
 }
 
+// ---------- Simpanan kekal (fail JSON) ----------
+let saveTimer = null;
+
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeState, 200);
+}
+
+function writeState() {
+  const data = [...rooms.values()].map((r) => ({
+    code: r.code,
+    phase: r.phase,
+    hostToken: r.hostToken,
+    qIndex: r.qIndex,
+    qStart: r.qStart,
+    deadline: r.deadline,
+    lastActive: r.lastActive,
+    players: [...r.players.values()],
+    responses: r.responses.map((m) => (m ? [...m.entries()] : null)),
+  }));
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${DATA_FILE}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(data));
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (err) {
+    console.error('Gagal simpan keadaan:', err.message);
+  }
+}
+
+function loadState() {
+  if (!fs.existsSync(DATA_FILE)) return;
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch (err) {
+    console.error('Gagal baca fail keadaan, bermula dengan bilik kosong:', err.message);
+    return;
+  }
+  const now = Date.now();
+  for (const d of data) {
+    if (now - d.lastActive > ROOM_TTL_MS) continue;
+    const room = newRoomState(d.code, d.hostToken);
+    room.qIndex = d.qIndex;
+    room.qStart = d.qStart;
+    room.deadline = d.deadline;
+    room.lastActive = d.lastActive;
+    for (const p of d.players) room.players.set(p.id, p);
+    room.responses = QUIZ.questions.map((_, i) => (d.responses[i] ? new Map(d.responses[i]) : null));
+    // Pemasa tidak boleh disambung semula selepas restart: soalan yang sedang dibuka didedahkan.
+    room.phase = d.phase === 'question' ? 'reveal' : d.phase;
+    room.answers = room.qIndex >= 0 ? room.responses[room.qIndex] || new Map() : new Map();
+    rooms.set(room.code, room);
+  }
+  console.log(`Dipulihkan ${rooms.size} bilik dari ${DATA_FILE}`);
+}
+
+// ---------- Eksport CSV ----------
+function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@]/.test(s)) s = `'${s}`; // elak formula Excel
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function buildCsv(room) {
+  const header = ['Kedudukan', 'Nama', 'Jumlah mata'];
+  QUIZ.questions.forEach((_, i) => header.push(`S${i + 1} jawapan`, `S${i + 1} mata`));
+  const rows = [header.map(csvCell).join(',')];
+
+  ranking(room).forEach((p, idx) => {
+    const cells = [idx + 1, p.name, p.score];
+    QUIZ.questions.forEach((q, i) => {
+      const rec = room.responses[i] ? room.responses[i].get(p.id) : null;
+      if (!rec) cells.push('Tiada jawapan', 0);
+      else cells.push(`${q.options[rec.choice]}${rec.correct ? ' (betul)' : ' (salah)'}`, rec.points);
+    });
+    rows.push(cells.map(csvCell).join(','));
+  });
+  return '﻿' + rows.join('\r\n') + '\r\n'; // BOM supaya Excel baca UTF-8 dengan betul
+}
+
 // ---------- Laluan API ----------
-function openStream(room, req, res, url) {
+function openStream(room, req, res) {
   const sub = { audience: 'player', playerId: null, res };
-  if (url.searchParams.get('audience') === 'host') {
-    requireHost(room, url.searchParams.get('token'));
+  if (req.headers['x-host-token']) {
+    requireHost(room, req);
     sub.audience = 'host';
   } else {
-    const playerId = url.searchParams.get('playerId');
-    if (!room.players.has(playerId)) throw new HttpError(403, 'Peserta tidak sah');
-    sub.playerId = playerId;
+    requirePlayer(room, req.headers['x-player-id']);
+    sub.playerId = req.headers['x-player-id'];
   }
 
   res.writeHead(200, {
@@ -341,7 +438,18 @@ async function handleApi(req, res, url) {
   const room = getRoom(parts[2]);
   const action = parts[3];
 
-  if (req.method === 'GET' && action === 'stream') return openStream(room, req, res, url);
+  if (req.method === 'GET' && action === 'stream') return openStream(room, req, res);
+
+  if (req.method === 'GET' && action === 'export') {
+    requireHost(room, req);
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="kuiz-${room.code}.csv"`,
+      'Cache-Control': 'no-store',
+    });
+    return res.end(buildCsv(room));
+  }
+
   if (req.method !== 'POST') throw new HttpError(405, 'Kaedah tidak dibenarkan');
 
   const body = await readBody(req);
@@ -351,11 +459,11 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { playerId: player.id, name: player.name });
   }
   if (action === 'answer') {
-    answer(room, body.playerId, body.choice);
+    answer(room, req.headers['x-player-id'], body.choice);
     return sendJson(res, 200, { ok: true });
   }
   if (action === 'control') {
-    requireHost(room, body.token);
+    requireHost(room, req);
     control(room, body.action);
     return sendJson(res, 200, { ok: true });
   }
@@ -403,22 +511,39 @@ const server = http.createServer(async (req, res) => {
 // Bersihkan bilik lama yang tiada penonton
 setInterval(() => {
   const now = Date.now();
+  let changed = false;
   for (const [code, room] of rooms) {
     if (room.subs.size === 0 && now - room.lastActive > ROOM_TTL_MS) {
       clearTimer(room);
       rooms.delete(code);
+      changed = true;
     }
   }
+  if (changed) persist();
 }, 10 * 60 * 1000).unref();
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Kuiz Live berjalan di port ${PORT}`);
-  console.log(`  Host (komputer):  http://localhost:${PORT}/host.html`);
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const iface of list || []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        console.log(`  Peserta (telefon): http://${iface.address}:${PORT}/play.html`);
+// Simpan segera apabila pelayan ditutup
+function shutdown() {
+  clearTimeout(saveTimer);
+  writeState();
+  process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+if (require.main === module) {
+  loadState();
+  server.listen(PORT, HOST, () => {
+    console.log(`Kuiz Live berjalan di port ${PORT}`);
+    console.log(`  Host (komputer):   http://localhost:${PORT}/host.html`);
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const iface of list || []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          console.log(`  Peserta (telefon): http://${iface.address}:${PORT}/play.html`);
+        }
       }
     }
-  }
-});
+  });
+}
+
+module.exports = { server, rooms, loadState, writeState };

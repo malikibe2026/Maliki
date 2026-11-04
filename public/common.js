@@ -18,10 +18,10 @@ window.Kuiz = (() => {
     return node;
   }
 
-  async function api(path, body) {
+  async function api(path, body, headers = {}) {
     const res = await fetch(path, body === undefined
-      ? {}
-      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      ? { headers }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = new Error(data.error || 'Ralat berlaku');
@@ -31,5 +31,63 @@ window.Kuiz = (() => {
     return data;
   }
 
-  return { h, api, SHAPES };
+  // Sambungan SSE melalui fetch supaya boleh hantar header (token tidak masuk URL).
+  // Mengembalikan fungsi untuk menutup sambungan.
+  function openStream(path, headers, onData, onRejected) {
+    let stopped = false;
+    let controller = null;
+
+    async function run() {
+      while (!stopped) {
+        controller = new AbortController();
+        try {
+          const res = await fetch(path, { headers, signal: controller.signal, cache: 'no-store' });
+          if (res.status === 403 || res.status === 404) {
+            if (!stopped) onRejected(res.status);
+            return;
+          }
+          if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buf.indexOf('\n\n')) >= 0) {
+              const chunk = buf.slice(0, idx);
+              buf = buf.slice(idx + 2);
+              for (const line of chunk.split('\n')) {
+                if (line.startsWith('data: ')) onData(JSON.parse(line.slice(6)));
+              }
+            }
+          }
+        } catch (err) {
+          if (stopped) return;
+        }
+        if (!stopped) await new Promise((r) => setTimeout(r, 2000)); // cuba semula
+      }
+    }
+
+    run();
+    return () => {
+      stopped = true;
+      if (controller) controller.abort();
+    };
+  }
+
+  async function download(path, headers, filename) {
+    const res = await fetch(path, { headers });
+    if (!res.ok) throw new Error('Gagal muat turun fail');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return { h, api, openStream, download, SHAPES };
 })();

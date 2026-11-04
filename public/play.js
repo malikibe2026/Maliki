@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { h, api, SHAPES } = window.Kuiz;
+  const { h, api, openStream, SHAPES } = window.Kuiz;
   const app = document.getElementById('app');
   const STORE_KEY = 'kuiz-player';
 
@@ -11,7 +11,7 @@
   let me = null;        // { code, playerId, name }
   let state = null;     // snapshot terkini
   let offset = 0;
-  let es = null;
+  let closeStream = null;
   let timerId = null;
   let timerFill = null;
   let timerText = null;
@@ -33,23 +33,23 @@
 
   // ---------- Sambungan ----------
   function connect() {
-    if (es) es.close();
-    const url = `/api/rooms/${me.code}/stream?audience=player&playerId=${encodeURIComponent(me.playerId)}`;
-    es = new EventSource(url);
-    es.onmessage = (e) => {
-      state = JSON.parse(e.data);
-      offset = state.now - Date.now();
-      render();
-    };
-    es.onerror = () => {
-      if (es && es.readyState === EventSource.CLOSED) {
-        es = null;
+    if (closeStream) closeStream();
+    closeStream = openStream(
+      `/api/rooms/${me.code}/stream`,
+      { 'X-Player-Id': me.playerId },
+      (data) => {
+        state = data;
+        offset = state.now - Date.now();
+        render();
+      },
+      () => {
+        closeStream = null;
         clearMe();
         state = null;
         message = 'Sesi tamat atau bilik tidak lagi wujud. Sila sertai semula.';
         render();
-      }
-    };
+      },
+    );
   }
 
   async function join(e) {
@@ -79,7 +79,7 @@
     chosen = { qNumber: state.qNumber, choice };
     render();
     try {
-      await api(`/api/rooms/${me.code}/answer`, { playerId: me.playerId, choice });
+      await api(`/api/rooms/${me.code}/answer`, { choice }, { 'X-Player-Id': me.playerId });
     } catch (err) {
       chosen = null;
       message = err.message;
