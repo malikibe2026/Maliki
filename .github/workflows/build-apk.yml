@@ -1,0 +1,48 @@
+name: Bina APK Tema HP
+
+on:
+  push:
+    branches:
+      - claude/live-interactive-quiz-t5jqz5
+    paths:
+      - "tema-hp/**"
+      - ".github/workflows/build-apk.yml"
+  pull_request:
+    paths:
+      - "tema-hp/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tema-hp
+
+    steps:
+      - name: Muat turun kod
+        uses: actions/checkout@v4
+
+      - name: Sediakan JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Sediakan Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sediakan Gradle 8.14
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Bina APK debug
+        run: gradle assembleDebug --no-daemon
+
+      - name: Muat naik APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tema-hp-debug-apk
+          path: tema-hp/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
