@@ -1,0 +1,59 @@
+{
+  "title": "Kuiz Asas Perangkaan",
+  "questions": [
+    {
+      "text": "Apakah nama Inggeris bagi Jabatan Perangkaan Malaysia?",
+      "options": ["Department of Statistics Malaysia", "Department of Standards Malaysia", "Data Office of Malaysia", "National Census Bureau"],
+      "answer": 0,
+      "limit": 20
+    },
+    {
+      "text": "Berapakah min aritmetik bagi data: 4, 8, 6, 10, 2?",
+      "options": ["4", "6", "8", "10"],
+      "answer": 1,
+      "limit": 20
+    },
+    {
+      "text": "Berapakah median bagi data: 3, 7, 9, 11, 15?",
+      "options": ["7", "9", "11", "15"],
+      "answer": 1,
+      "limit": 20
+    },
+    {
+      "text": "Berapakah mod bagi data: 2, 3, 3, 5, 7, 3, 8?",
+      "options": ["2", "3", "5", "7"],
+      "answer": 1,
+      "limit": 20
+    },
+    {
+      "text": "Data yang dikumpul terus daripada responden melalui soal selidik dipanggil data apa?",
+      "options": ["Primer", "Sekunder", "Kualitatif", "Diskret"],
+      "answer": 0,
+      "limit": 20
+    },
+    {
+      "text": "Carta apakah yang paling sesuai untuk menunjukkan peratusan bahagian daripada keseluruhan?",
+      "options": ["Carta garis", "Carta pai", "Histogram", "Graf serakan"],
+      "answer": 1,
+      "limit": 20
+    },
+    {
+      "text": "Berapakah julat bagi data: 5, 9, 2, 14?",
+      "options": ["7", "9", "12", "14"],
+      "answer": 2,
+      "limit": 20
+    },
+    {
+      "text": "Persampelan rawak mudah bermaksud apa?",
+      "options": ["Setiap unit dalam populasi mempunyai peluang sama untuk dipilih", "Hanya unit yang mudah diakses dipilih", "Responden dipilih mengikut kumpulan umur", "Sampel dipilih oleh penyelia sahaja"],
+      "answer": 0,
+      "limit": 25
+    },
+    {
+      "text": "Antara berikut, yang manakah data kualitatif?",
+      "options": ["Umur dalam tahun", "Pendapatan bulanan", "Jantina", "Bilangan anak"],
+      "answer": 2,
+      "limit": 20
+    }
+  ]
+}

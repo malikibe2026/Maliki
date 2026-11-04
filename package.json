@@ -1,0 +1,14 @@
+{
+  "name": "kuiz-live",
+  "version": "1.0.0",
+  "description": "Kuiz interaktif masa nyata (seperti Kahoot) dengan skrin host, ranking dan jawapan peserta.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

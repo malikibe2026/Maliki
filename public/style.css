@@ -1,0 +1,165 @@
+:root {
+  --bg1: #46178f;
+  --bg2: #1d0b45;
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --panel: rgba(255, 255, 255, 0.08);
+  --red: #e21b3c;
+  --blue: #1368ce;
+  --yellow: #d89e00;
+  --green: #26890c;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg2);
+  background-image: radial-gradient(circle at top, var(--bg1), var(--bg2));
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+h1, h2, h3, p { margin: 0; }
+
+button {
+  font: inherit;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 22px;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary { background: #fff; color: var(--bg2); font-weight: 700; }
+.btn-secondary { background: rgba(255, 255, 255, 0.15); }
+.btn-small { padding: 8px 14px; font-size: 0.9rem; }
+
+input {
+  font: inherit;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  outline: none;
+}
+input:focus { border-color: #fff; }
+
+.muted { color: var(--muted); }
+.error { color: #ffb3bf; font-weight: 600; min-height: 1.4em; }
+
+.chip {
+  display: inline-block;
+  background: #fff;
+  color: var(--bg2);
+  border-radius: 99px;
+  padding: 8px 16px;
+  margin: 4px;
+  font-weight: 600;
+  animation: pop 0.35s ease-out;
+}
+@keyframes pop {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ---------- Pilihan jawapan (warna & bentuk seperti Kahoot) ---------- */
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.opt {
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 600;
+  font-size: 1.2rem;
+  min-height: 90px;
+  text-align: left;
+  border: 0;
+  width: 100%;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.opt-0 { background: var(--red); }
+.opt-1 { background: var(--blue); }
+.opt-2 { background: var(--yellow); }
+.opt-3 { background: var(--green); }
+.opt .shape { font-size: 1.6rem; opacity: 0.9; flex: none; }
+.opt .opt-text { flex: 1; }
+.opt .count {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 99px;
+  padding: 4px 14px;
+  font-size: 1.1rem;
+}
+.opt.correct { outline: 6px solid #fff; outline-offset: 2px; transform: scale(1.02); }
+.opt.dim { opacity: 0.3; }
+
+/* ---------- Pemasa ---------- */
+.bar { height: 12px; background: rgba(255, 255, 255, 0.2); border-radius: 99px; overflow: hidden; }
+.bar-fill { height: 100%; width: 100%; background: #fff; transition: width 0.2s linear; }
+
+.center { text-align: center; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* ---------- Skrin host (projektor) ---------- */
+.host main { max-width: 1280px; margin: 0 auto; padding: 24px; min-height: 100vh; display: flex; flex-direction: column; gap: 20px; }
+.host .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 1.1rem; }
+.host .question-text { font-size: clamp(1.8rem, 3.6vw, 3rem); font-weight: 700; line-height: 1.25; text-align: center; padding: 12px 0; }
+.host .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; flex: 1; }
+.host .layout.no-side { grid-template-columns: 1fr; }
+.host .options { font-size: 1.1rem; }
+.host .opt { min-height: 120px; font-size: clamp(1.1rem, 2.2vw, 1.8rem); }
+.host .controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.host .code { font-size: clamp(4rem, 12vw, 8rem); font-weight: 800; letter-spacing: 0.15em; text-align: center; }
+.host .join-url { font-size: clamp(1.2rem, 2.5vw, 2rem); font-weight: 600; text-align: center; word-break: break-all; }
+.host .players { display: flex; flex-wrap: wrap; justify-content: center; min-height: 80px; }
+.host .leader-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 10px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 1.1rem;
+}
+.host .leader-row:last-child { border-bottom: 0; }
+.host .podium { display: flex; justify-content: center; align-items: flex-end; gap: 16px; padding-top: 16px; }
+.host .podium-step {
+  background: var(--panel); border-radius: var(--radius); padding: 16px 20px;
+  text-align: center; min-width: 160px;
+}
+.host .podium-step.p1 { background: var(--yellow); color: #2a1a00; }
+.host .podium-step.p2 { background: #9aa4b2; color: #111; }
+.host .podium-step.p3 { background: #b06a3b; color: #fff; }
+.host .podium-step .place { font-size: 2.2rem; font-weight: 800; }
+
+/* ---------- Skrin peserta (telefon) ---------- */
+.play main { max-width: 520px; margin: 0 auto; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; gap: 16px; }
+.play .q-text { font-size: 1.3rem; font-weight: 700; line-height: 1.35; text-align: center; padding: 8px 0; }
+.play .timer-num { font-size: 2.5rem; font-weight: 800; text-align: center; }
+.play .result { border-radius: var(--radius); padding: 28px 16px; text-align: center; font-size: 1.6rem; font-weight: 800; }
+.play .result.ok { background: var(--green); }
+.play .result.bad { background: var(--red); }
+.play .result.none { background: #555; }
+.play .result small { display: block; font-size: 1rem; font-weight: 500; margin-top: 8px; opacity: 0.9; }
+.play .opt { min-height: 96px; font-size: 1.1rem; }
+.play .join-form { display: flex; flex-direction: column; gap: 14px; }
+.play .options { grid-template-columns: 1fr 1fr; }
+.play .options.list { grid-template-columns: 1fr; }
+
+@media (max-width: 600px) {
+  .options { grid-template-columns: 1fr; }
+  .opt { min-height: 72px; font-size: 1.05rem; }
+  .host .layout { grid-template-columns: 1fr; }
+  .host .opt { min-height: 90px; }
+}
