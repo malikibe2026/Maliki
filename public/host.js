@@ -102,13 +102,20 @@
       h('p', { class: 'error' }, errorMsg));
   }
 
+  // Kanvas QR dilukis selepas skrin dipasang (lihat render)
+  let pendingQr = null;
+
   function lobbyScreen() {
     const players = state.players || [];
+    const joinUrl = `${location.origin}/play.html?code=${room.code}`;
+    const canvas = h('canvas', { class: 'qr-canvas', width: 220, height: 220 });
+    pendingQr = { canvas, text: joinUrl };
     return [
       topBar(null),
       h('section', { class: 'layout no-side', style: 'align-content:center;' },
         h('div', { class: 'stack' },
-          h('p', { class: 'center muted' }, 'Pergi ke alamat ini di telefon anda:'),
+          h('p', { class: 'center muted' }, 'Imbas QR ini dengan telefon, atau pergi ke alamat di bawah:'),
+          h('div', { class: 'qr-wrap' }, canvas),
           h('p', { class: 'join-url' }, `${location.origin}/play.html`),
           h('p', { class: 'center muted' }, 'Masukkan kod:'),
           h('div', { class: 'code' }, room.code),
@@ -233,6 +240,20 @@
     else nodes = finalScreen();
 
     app.replaceChildren(...[nodes].flat().filter(Boolean));
+
+    if (pendingQr) {
+      const { canvas, text } = pendingQr;
+      pendingQr = null;
+      if (window.QRCode) {
+        window.QRCode.toCanvas(canvas, text, {
+          width: 220,
+          margin: 1,
+          color: { dark: '#1d0b45', light: '#ffffff' },
+        }, (err) => { if (err) canvas.replaceWith(h('p', { class: 'muted center' }, text)); });
+      } else {
+        canvas.replaceWith(h('p', { class: 'muted center' }, text));
+      }
+    }
 
     if (state && state.phase === 'question') {
       updateTimer();

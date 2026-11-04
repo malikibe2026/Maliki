@@ -127,6 +127,8 @@ input:focus { border-color: #fff; }
 .host .controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .host .code { font-size: clamp(4rem, 12vw, 8rem); font-weight: 800; letter-spacing: 0.15em; text-align: center; }
 .host .join-url { font-size: clamp(1.2rem, 2.5vw, 2rem); font-weight: 600; text-align: center; word-break: break-all; }
+.host .qr-wrap { display: flex; justify-content: center; }
+.host .qr-canvas { background: #fff; border-radius: 18px; padding: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); width: 220px; height: 220px; }
 .host .players { display: flex; flex-wrap: wrap; justify-content: center; min-height: 80px; }
 .host .leader-row {
   display: flex; justify-content: space-between; gap: 10px;
