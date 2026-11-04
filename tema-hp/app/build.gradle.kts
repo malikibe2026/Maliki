@@ -15,7 +15,21 @@ android {
         versionName = "1.0"
     }
 
+    // Kunci debug tetap: setiap build (termasuk GitHub Actions) ditandatangani
+    // dengan kunci yang sama, supaya APK baru boleh dipasang atas versi lama.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }
