@@ -48,6 +48,7 @@ class MainActivity : Activity() {
     private val glass = Color.argb(36, 255, 255, 255)
     private val glassStroke = Color.argb(56, 255, 255, 255)
     private val deepRed = Color.rgb(140, 16, 20)
+    private val mint = Color.rgb(184, 242, 208)   // hijau muda premium
 
     private val prayerNames = listOf("Subuh", "Syuruk", "Zohor", "Asar", "Maghrib", "Isyak")
 
@@ -58,6 +59,12 @@ class MainActivity : Activity() {
     private val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
     private lateinit var robot: RobotView
+    private lateinit var weatherTempView: TextView
+    private lateinit var weatherDescView: TextView
+    private lateinit var weatherMetaView: TextView
+    private var weatherLoading = false
+    private var weatherOk = false
+    private var lastWeatherAttempt = 0L
     private lateinit var greetingView: TextView
     private lateinit var clockView: TextView
     private lateinit var dateView: TextView
@@ -87,6 +94,8 @@ class MainActivity : Activity() {
             updatePrayerCard(now)
             robot.bob(tick)
             if (tick % 4 == 0) robot.blink()
+            val weatherDue = System.currentTimeMillis() - lastWeatherAttempt > (if (weatherOk) 30 else 5) * 60 * 1000L
+            if (weatherDue && !weatherLoading) loadWeather()
             if (tick % 30 == 0) {
                 updateBattery()
                 updateStorage()
@@ -104,6 +113,7 @@ class MainActivity : Activity() {
         window.statusBarColor = redTop
         window.navigationBarColor = redBottom
         setContentView(buildUi())
+        renderWeather(Weather.cached(this))
         loadPrayer()
     }
 
@@ -172,6 +182,7 @@ class MainActivity : Activity() {
         root.addView(dateView, lp(MATCH, WRAP, top = dp(4)))
 
         root.addView(buildPrayerCard(), lp(MATCH, WRAP, top = dp(24)))
+        root.addView(buildWeatherCard(), lp(MATCH, WRAP, top = dp(12)))
 
         // Bateri dan storan
         battery = statCard("BATERI")
@@ -281,7 +292,7 @@ class MainActivity : Activity() {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = rounded(Color.argb(50, 255, 255, 255), 3)
-            addView(View(this@MainActivity).apply { background = rounded(Color.WHITE, 3) },
+            addView(View(this@MainActivity).apply { background = rounded(mint, 3) },
                 LinearLayout.LayoutParams(0, MATCH, 0f))
             addView(View(this@MainActivity), LinearLayout.LayoutParams(0, MATCH, 100f))
         }
@@ -296,9 +307,13 @@ class MainActivity : Activity() {
         bar.requestLayout()
     }
 
-    private fun glassCard(): LinearLayout = LinearLayout(this).apply {
+    private fun glassCard(mintAccent: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(glass, 20, glassStroke)
+        background = if (mintAccent) {
+            rounded(Color.argb(40, 184, 242, 208), 20, Color.argb(120, 184, 242, 208))
+        } else {
+            rounded(glass, 20, glassStroke)
+        }
         setPadding(dp(16), dp(14), dp(16), dp(14))
     }
 
@@ -407,7 +422,7 @@ class MainActivity : Activity() {
         if (cell.active == active) return
         cell.active = active
         if (active) {
-            cell.box.background = rounded(Color.WHITE, 12)
+            cell.box.background = rounded(mint, 12)
             cell.name.setTextColor(deepRed)
             cell.time.setTextColor(deepRed)
             cell.name.alpha = 1f
@@ -441,6 +456,94 @@ class MainActivity : Activity() {
                     loadPrayer()
                 } else {
                     Toast.makeText(this, "Kod zon tidak sah (contoh: SGR01)", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    // ---------- Cuaca ----------
+    private fun buildWeatherCard(): View {
+        val card = glassCard(mintAccent = true).apply {
+            setOnLongClickListener {
+                askCoords()
+                true
+            }
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val left = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        left.addView(label(10f, font = "sans-serif-medium", alpha = 0.75f).apply {
+            text = "CUACA"
+            letterSpacing = 0.2f
+            setTextColor(mint)
+        })
+        weatherDescView = label(16f, font = "sans-serif-light")
+        left.addView(weatherDescView, lp(MATCH, WRAP, top = dp(4)))
+        weatherMetaView = label(11f, alpha = 0.6f)
+        left.addView(weatherMetaView, lp(MATCH, WRAP, top = dp(2)))
+        row.addView(left, lp(0, WRAP, weight = 1f))
+
+        weatherTempView = label(42f, font = "sans-serif-thin").apply {
+            text = "--°C"
+            setTextColor(mint)
+        }
+        row.addView(weatherTempView)
+        card.addView(row)
+        return card
+    }
+
+    private fun renderWeather(now: Weather.Now?) {
+        if (now == null) {
+            weatherTempView.text = "--°C"
+            weatherDescView.text = if (weatherLoading) "Memuatkan cuaca…" else "Tiada data cuaca"
+            weatherMetaView.text = "Tahan kad untuk tukar lokasi"
+            return
+        }
+        weatherTempView.text = "${Math.round(now.temp)}°C"
+        weatherDescView.text = Weather.describe(now.code)
+        weatherMetaView.text = "Kelembapan ${now.humidity}% · tahan kad untuk tukar lokasi"
+    }
+
+    private fun loadWeather() {
+        weatherLoading = true
+        lastWeatherAttempt = System.currentTimeMillis()
+        val appContext = applicationContext
+        Thread {
+            val (lat, lon) = Weather.coords(appContext)
+            val fresh = Weather.fetch(lat, lon)
+            if (fresh != null) Weather.save(appContext, fresh)
+            val shown = fresh ?: Weather.cached(appContext)
+            runOnUiThread {
+                weatherLoading = false
+                weatherOk = fresh != null
+                renderWeather(shown)
+            }
+        }.start()
+    }
+
+    private fun askCoords() {
+        val (lat, lon) = Weather.coords(this)
+        val input = EditText(this).apply {
+            setText("$lat,$lon")
+            hint = "lat,lon cth. 3.0733,101.5185"
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Lokasi cuaca")
+            .setMessage("Masukkan latitud dan longitud, dipisahkan dengan koma")
+            .setView(input)
+            .setPositiveButton("Simpan") { _, _ ->
+                val parsed = Weather.parseCoords(input.text.toString())
+                if (parsed != null) {
+                    Weather.setCoords(this, parsed.first, parsed.second)
+                    lastWeatherAttempt = 0L
+                    loadWeather()
+                } else {
+                    Toast.makeText(this, "Format tidak sah (contoh: 3.0733,101.5185)", Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton("Batal", null)
