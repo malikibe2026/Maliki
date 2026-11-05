@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -117,8 +118,17 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
-    // Launcher tidak keluar bila tekan Back
-    override fun onBackPressed() {}
+    // Sebagai Home app, Back tidak keluar. Jika dibuka dari ikon biasa, Back kembali ke launcher lama.
+    override fun onBackPressed() {
+        if (isDefaultHome()) return
+        super.onBackPressed()
+    }
+
+    private fun isDefaultHome(): Boolean {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
+        return resolved?.activityInfo?.packageName == packageName
+    }
 
     // ---------- UI ----------
     private fun buildUi(): View {
