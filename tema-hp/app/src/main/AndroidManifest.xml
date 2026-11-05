@@ -13,6 +13,7 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
         android:label="Tema HP"
         android:theme="@android:style/Theme.Material.NoActionBar">
 

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Latar merah -->
+    <path
+        android:fillColor="#C62828"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#8E1218"
+        android:pathData="M54,0 A54,54 0 1 0 54,108 A54,54 0 1 0 54,0 Z" />
+
+    <!-- Antena -->
+    <path
+        android:strokeColor="#FFCDBA"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,34 V26" />
+    <path
+        android:fillColor="#FF705C"
+        android:pathData="M54,20 A4,4 0 1 0 54,28 A4,4 0 1 0 54,20 Z" />
+
+    <!-- Telinga -->
+    <path
+        android:fillColor="#FFCDBA"
+        android:pathData="M22,50 H28 V62 H22 Z" />
+    <path
+        android:fillColor="#FFCDBA"
+        android:pathData="M80,50 H86 V62 H80 Z" />
+
+    <!-- Kepala krim -->
+    <path
+        android:fillColor="#FFF4EC"
+        android:pathData="M42,34 H66 A14,14 0 0 1 80,48 V64 A14,14 0 0 1 66,78 H42 A14,14 0 0 1 28,64 V48 A14,14 0 0 1 42,34 Z" />
+
+    <!-- Paparan muka gelap -->
+    <path
+        android:fillColor="#2A0A0F"
+        android:pathData="M44,42 H68 A10,10 0 0 1 78,52 V60 A10,10 0 0 1 68,70 H44 A10,10 0 0 1 34,60 V52 A10,10 0 0 1 44,42 Z" />
+
+    <!-- Mata -->
+    <path
+        android:fillColor="#FFF4EC"
+        android:pathData="M41,50 H50 V55 H41 Z" />
+    <path
+        android:fillColor="#FFF4EC"
+        android:pathData="M58,50 H67 V55 H58 Z" />
+
+    <!-- Senyuman -->
+    <path
+        android:strokeColor="#FF705C"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M50,62 Q54,66 58,62" />
+
+    <!-- Badan -->
+    <path
+        android:fillColor="#FFAB98"
+        android:pathData="M44,80 H64 A5,5 0 0 1 69,85 V88 A5,5 0 0 1 64,93 H44 A5,5 0 0 1 39,88 V85 A5,5 0 0 1 44,80 Z" />
+</vector>
