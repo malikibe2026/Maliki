@@ -56,6 +56,8 @@ class MainActivity : Activity() {
     private val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
     private val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
+    private lateinit var robot: RobotView
+    private lateinit var greetingView: TextView
     private lateinit var clockView: TextView
     private lateinit var dateView: TextView
     private lateinit var nextNameView: TextView
@@ -82,6 +84,8 @@ class MainActivity : Activity() {
             val now = Calendar.getInstance()
             updateClock(now)
             updatePrayerCard(now)
+            robot.bob(tick)
+            if (tick % 4 == 0) robot.blink()
             if (tick % 30 == 0) {
                 updateBattery()
                 updateStorage()
@@ -126,6 +130,24 @@ class MainActivity : Activity() {
             )
             setPadding(dp(20), dp(28), dp(20), dp(12))
         }
+
+        // Robot HUMAIRA
+        robot = RobotView(this)
+        root.addView(robot, LinearLayout.LayoutParams(dp(120), dp(120)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        })
+        val nameTag = label(12f, font = "sans-serif-medium").apply {
+            text = "HUMAIRA"
+            letterSpacing = 0.3f
+            gravity = Gravity.CENTER
+            background = rounded(Color.argb(60, 255, 255, 255), 12)
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+        }
+        root.addView(nameTag, lp(WRAP, WRAP, top = dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        greetingView = label(13f, font = "sans-serif-light", alpha = 0.9f).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        root.addView(greetingView, lp(MATCH, WRAP, top = dp(6)))
 
         // Jam besar
         clockView = label(78f, font = "sans-serif-thin").apply {
@@ -297,6 +319,14 @@ class MainActivity : Activity() {
     // ---------- Jam dan tarikh ----------
     private fun updateClock(now: Calendar) {
         clockView.text = hhmm(now)
+        val hour = now.get(Calendar.HOUR_OF_DAY)
+        val salam = when {
+            hour < 11 -> "Selamat pagi"
+            hour < 15 -> "Selamat tengah hari"
+            hour < 19 -> "Selamat petang"
+            else -> "Selamat malam"
+        }
+        greetingView.text = "$salam, Humaira"
         val days = arrayOf("Ahad", "Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu")
         val months = arrayOf(
             "Januari", "Februari", "Mac", "April", "Mei", "Jun",
