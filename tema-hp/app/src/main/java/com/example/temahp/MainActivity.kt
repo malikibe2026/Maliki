@@ -15,8 +15,10 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
+import android.provider.MediaStore
 import android.text.Editable
 import android.text.InputType
+import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
@@ -40,6 +42,38 @@ class MainActivity : Activity() {
     }
 
     private class Stat(val card: LinearLayout, val value: TextView, val bar: LinearLayout)
+
+    // Pintasan: cari mengikut nama pakej, kemudian kata kunci dalam nama aplikasi
+    private class Shortcut(
+        val key: String,
+        val label: String,
+        val pkgs: List<String>,
+        val keywords: List<String>,
+        val special: Intent? = null,
+    )
+
+    private class Resolved(val label: String, val icon: Drawable, val launch: Intent)
+
+    private val shortcuts = listOf(
+        Shortcut("wa", "WhatsApp", listOf("com.whatsapp"), listOf("whatsapp")),
+        Shortcut("claude", "Claude", listOf("com.anthropic.claude"), listOf("claude")),
+        Shortcut("chatgpt", "ChatGPT", listOf("com.openai.chatgpt"), listOf("chatgpt")),
+        Shortcut("call", "Call", emptyList(), emptyList(), Intent(Intent.ACTION_DIAL)),
+        Shortcut("camera", "Kamera", emptyList(), emptyList(), Intent(MediaStore.ACTION_IMAGE_CAPTURE)),
+        Shortcut("chrome", "Chrome", listOf("com.android.chrome"), listOf("chrome")),
+        Shortcut("telegram", "Telegram", listOf("org.telegram.messenger"), listOf("telegram")),
+        Shortcut("tiktok", "TikTok", listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill"), listOf("tiktok")),
+        Shortcut("threads", "Threads", listOf("com.instagram.barcelona"), listOf("threads")),
+        Shortcut(
+            "bank", "Bank", emptyList(),
+            listOf("maybank", "cimb", "rhb", "bank islam", "bank rakyat", "muamalat", "ambank", "hong leong", "public bank", "bsn", "affin", "bank"),
+        ),
+        Shortcut(
+            "ewallet", "E-Wallet", emptyList(),
+            listOf("touch 'n go", "tng", "boost", "grabpay", "shopeepay", "e-wallet", "ewallet", "duitnow"),
+        ),
+    )
+    private lateinit var dock: LinearLayout
 
     // ---------- Palet warna ----------
     private val redTop = Color.rgb(211, 47, 47)      // merah terang
@@ -209,6 +243,7 @@ class MainActivity : Activity() {
                 override fun afterTextChanged(s: Editable?) {}
             })
         }
+        root.addView(buildDock(), lp(MATCH, WRAP, top = dp(12)))
         root.addView(searchBox, lp(MATCH, WRAP, top = dp(16)))
 
         appList = ListView(this).apply {
@@ -550,6 +585,112 @@ class MainActivity : Activity() {
             .show()
     }
 
+    // ---------- Pintasan PANTAS ----------
+    private fun buildDock(): View {
+        val card = glassCard()
+        card.addView(label(10f, font = "sans-serif-medium", alpha = 0.85f).apply {
+            text = "PANTAS"
+            letterSpacing = 0.2f
+            setTextColor(mint)
+        })
+        dock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        card.addView(dock, lp(MATCH, WRAP, top = dp(6)))
+        return card
+    }
+
+    private fun renderDock() {
+        if (!::dock.isInitialized) return
+        dock.removeAllViews()
+        shortcuts.chunked(6).forEach { chunk ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            chunk.forEach { sc -> row.addView(dockTile(sc), lp(0, WRAP, weight = 1f)) }
+            dock.addView(row, lp(MATCH, WRAP, top = dp(6)))
+        }
+    }
+
+    private fun resolveShortcut(sc: Shortcut): Resolved? {
+        val special = sc.special
+        if (special != null) {
+            val ri = packageManager.resolveActivity(special, 0) ?: return null
+            return Resolved(sc.label, ri.loadIcon(packageManager), special)
+        }
+        val picked = prefs.getString("pick_${sc.key}", null)
+        val app = (if (picked != null) allApps.firstOrNull { it.pkg == picked } else null)
+            ?: allApps.firstOrNull { it.pkg in sc.pkgs }
+            ?: allApps.firstOrNull { a ->
+                val name = a.label.lowercase(Locale.getDefault())
+                sc.keywords.any { name.contains(it) }
+            }
+            ?: return null
+        val launch = packageManager.getLaunchIntentForPackage(app.pkg) ?: return null
+        return Resolved(sc.label, app.icon, launch)
+    }
+
+    private fun dockTile(sc: Shortcut): View {
+        val r = resolveShortcut(sc)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        val iconView: View = if (r != null) {
+            ImageView(this).apply {
+                setImageDrawable(r.icon)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+        } else {
+            TextView(this).apply {
+                text = "+"
+                textSize = 20f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                background = rounded(Color.argb(40, 255, 255, 255), 12)
+            }
+        }
+        box.addView(iconView, LinearLayout.LayoutParams(dp(40), dp(40)))
+        box.addView(
+            label(10f, alpha = 0.9f).apply {
+                text = r?.label ?: sc.label
+                gravity = Gravity.CENTER
+                setSingleLine(true)
+                ellipsize = TextUtils.TruncateAt.END
+            },
+            lp(MATCH, WRAP, top = dp(4)),
+        )
+        box.setOnClickListener {
+            if (r == null) {
+                Toast.makeText(this, "Tekan lama untuk pilih ${sc.label}", Toast.LENGTH_SHORT).show()
+            } else {
+                try {
+                    startActivity(r.launch)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Tidak dapat dibuka", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        box.setOnLongClickListener {
+            pickFor(sc)
+            true
+        }
+        return box
+    }
+
+    private fun pickFor(sc: Shortcut) {
+        if (sc.special != null || allApps.isEmpty()) return
+        val names = allApps.map { it.label }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Pilih aplikasi untuk ${sc.label}")
+            .setItems(names) { _, which ->
+                prefs.edit().putString("pick_${sc.key}", allApps[which].pkg).apply()
+                renderDock()
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
     // ---------- Bateri dan storan ----------
     private fun updateBattery() {
         val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -592,6 +733,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 allApps = apps
                 filterApps()
+                renderDock()
             }
         }.start()
     }
