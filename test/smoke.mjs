@@ -1,4 +1,4 @@
-// Ujian integrasi: 30 peserta, kuiz penuh, eksport CSV, dan restart pelayan.
+// Ujian integrasi: 30 peserta, kuiz penuh, eksport CSV, restart pelayan, privasi ID dan had.
 // Jalankan dengan: npm test
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -19,10 +19,10 @@ const check = (ok, msg) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function startServer() {
+function startServer(extraEnv = {}, dataDir = DATA_DIR) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(root, 'server.js')], {
-      env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR },
+      env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR: dataDir, ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';
@@ -50,7 +50,7 @@ const api = async (method, p, { body, headers = {} } = {}) => {
 
 // Dengar SSE dan simpan snapshot terakhir
 function watch(p, headers) {
-  const w = { last: null, count: 0, stop: null };
+  const w = { last: null, count: 0, stop: null, ended: false };
   const ac = new AbortController();
   w.stop = () => ac.abort();
   (async () => {
@@ -72,6 +72,7 @@ function watch(p, headers) {
         }
       }
     } catch { /* dihentikan */ }
+    w.ended = true;
   })();
   return w;
 }
@@ -107,6 +108,20 @@ const pWatch = watch(`/api/rooms/${code}/stream`, { 'X-Player-Id': players[0].id
 await waitFor(() => host.last && host.last.playerCount === PLAYERS);
 check(host.last.players.length === PLAYERS, 'host nampak semua peserta di lobi');
 check(!('correct' in pWatch.last), 'peserta tidak nampak jawapan betul');
+await waitFor(() => pWatch.last && pWatch.last.playerCount === PLAYERS);
+const leaksId = (snap) => players.slice(1).some((p) => JSON.stringify(snap).includes(p.id));
+check(pWatch.last.players.length === PLAYERS && !leaksId(pWatch.last), 'lobi tidak dedahkan ID peserta lain');
+check(pWatch.last.players.every((p) => !('id' in p)), 'senarai peserta di lobi tiada medan id');
+
+// Stream yang berlebihan untuk peserta yang sama: yang paling lama ditutup
+const extra = [1, 2, 3].map(() => watch(`/api/rooms/${code}/stream`, { 'X-Player-Id': players[1].id }));
+await waitFor(() => extra.every((w) => w.last));
+const fourth = watch(`/api/rooms/${code}/stream`, { 'X-Player-Id': players[1].id });
+await waitFor(() => fourth.last && extra.some((w) => w.ended));
+await sleep(100);
+check(fourth.last && !fourth.ended && extra.filter((w) => w.ended).length === 1,
+  'maksimum 3 stream serentak bagi setiap peserta (yang paling lama ditutup)');
+[...extra, fourth].forEach((w) => w.stop());
 
 // Kawalan dan sekatan token
 const noTok = await api('POST', `/api/rooms/${code}/control`, { body: { action: 'start' }, headers: { 'X-Host-Token': 'salah' } });
@@ -136,6 +151,9 @@ await api('POST', `/api/rooms/${code}/control`, { body: { action: 'next' }, head
 await waitFor(() => host.last && host.last.phase === 'final');
 check(host.last.phase === 'final' && host.last.ranking.length === PLAYERS, 'kuiz tamat dengan ranking 30 peserta');
 const scores = host.last.ranking.map((p) => p.score);
+await waitFor(() => pWatch.last && pWatch.last.phase === 'final');
+check(!leaksId(host.last) && !leaksId(pWatch.last), 'ranking akhir tidak dedahkan ID peserta');
+check(pWatch.last.you && pWatch.last.you.rank >= 1, 'peserta masih nampak kedudukan sendiri');
 check(scores.every((s, i) => i === 0 || scores[i - 1] >= s), 'ranking tersusun ikut mata menurun');
 
 const csv = await api('GET', `/api/rooms/${code}/export`, { headers: hostHeaders });
@@ -169,7 +187,43 @@ check(second.status === 201 && second.data.code !== code, 'boleh cipta bilik bar
 
 server.kill('SIGTERM');
 await new Promise((r) => server.on('exit', r));
+
+// 4. Had: peserta setiap bilik dan bilik setiap peranti
+const stopServer = async () => { server.kill('SIGTERM'); await new Promise((r) => server.on('exit', r)); };
+const limitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kuiz-had-'));
+server = await startServer({ MAX_PLAYERS: '3', MAX_ROOMS_PER_IP: '2', MAX_ROOMS: '0' }, limitDir);
+const ra = await api('POST', '/api/rooms');
+for (let i = 0; i < 3; i++) await api('POST', `/api/rooms/${ra.data.code}/join`, { body: { name: `P${i}` } });
+const full = await api('POST', `/api/rooms/${ra.data.code}/join`, { body: { name: 'Lebih' } });
+check(full.status === 409, 'bilik penuh menolak peserta ke-4 (MAX_PLAYERS=3)');
+
+const rb = await api('POST', '/api/rooms');
+const rc = await api('POST', '/api/rooms');
+const gone = await api('GET', `/api/rooms/${ra.data.code}/stream`, { headers: { 'X-Host-Token': ra.data.hostToken } });
+check(rc.status === 201 && gone.status === 404, 'bilik lama tanpa skrin dibuang bila had bilik setiap peranti dicapai');
+const hb = watch(`/api/rooms/${rb.data.code}/stream`, { 'X-Host-Token': rb.data.hostToken });
+const hc = watch(`/api/rooms/${rc.data.code}/stream`, { 'X-Host-Token': rc.data.hostToken });
+await waitFor(() => hb.last && hc.last);
+const rd = await api('POST', '/api/rooms');
+check(rd.status === 429, 'bilik baru ditolak bila semua bilik peranti ini sedang dibuka');
+hb.stop();
+hc.stop();
+await stopServer();
+
+const limitDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'kuiz-had-'));
+server = await startServer({ MAX_ROOMS: '2', MAX_ROOMS_PER_IP: '0', MAX_PLAYERS_PER_IP: '2' }, limitDir2);
+const r1 = await api('POST', '/api/rooms');
+await api('POST', '/api/rooms');
+const r3 = await api('POST', '/api/rooms');
+check(r3.status === 503, 'pelayan menolak bilik baru bila MAX_ROOMS dicapai');
+for (let i = 0; i < 2; i++) await api('POST', `/api/rooms/${r1.data.code}/join`, { body: { name: `Q${i}` } });
+const ipFull = await api('POST', `/api/rooms/${r1.data.code}/join`, { body: { name: 'Q3' } });
+check(ipFull.status === 429, 'had peserta setiap peranti dikuatkuasakan (MAX_PLAYERS_PER_IP=2)');
+await stopServer();
+
 fs.rmSync(DATA_DIR, { recursive: true, force: true });
+fs.rmSync(limitDir, { recursive: true, force: true });
+fs.rmSync(limitDir2, { recursive: true, force: true });
 
 console.log(failures ? `\n${failures} ujian gagal` : '\nSemua ujian lulus');
 process.exit(failures ? 1 : 0);
