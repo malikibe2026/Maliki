@@ -65,3 +65,10 @@ Selepas kuiz tamat, host klik **Muat turun keputusan (CSV)**. Fail mengandungi k
 npm test
 ```
 Ujian ini menjalankan pelayan sementara dengan 30 peserta serentak, melengkapkan kuiz, menguji eksport CSV, dan menguji restart pelayan.
+
+## Skill audit keselamatan (Claude Code)
+Repo ini mengandungi skill `security-audit` daripada Cloudflare di `.claude/skills/security-audit/` (lesen MIT, sumber dalam `SOURCE.md`). Bila Claude Code dibuka dalam repo ini, minta contohnya:
+```
+buat audit keselamatan untuk server.js
+```
+Soalan biasa guna mod panduan. Audit penuh (6 fasa, fail laporan) hanya berjalan bila diminta secara jelas, dan laporan ditulis di luar repo (`~/security-audit-skill/<repo>/run-N`) secara lalai.
