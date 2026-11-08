@@ -15,6 +15,16 @@ const QUIZ = JSON.parse(fs.readFileSync(path.join(__dirname, 'quiz.json'), 'utf8
 const MAX_POINTS = 1000;
 const ROOM_TTL_MS = 4 * 60 * 60 * 1000; // bilik tanpa aktiviti dipadam selepas 4 jam
 const MAX_BODY_BYTES = 16 * 1024;
+const envInt = (name, fallback) => {
+  const n = Number(process.env[name]);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+};
+// Had untuk elak banjir bilik, peserta palsu dan sambungan berlebihan (0 = tiada had)
+const MAX_ROOMS = envInt('MAX_ROOMS', 50);
+const MAX_ROOMS_PER_IP = envInt('MAX_ROOMS_PER_IP', 5);
+const MAX_PLAYERS = envInt('MAX_PLAYERS', 100);
+const MAX_PLAYERS_PER_IP = envInt('MAX_PLAYERS_PER_IP', 0);
+const MAX_STREAMS_PER_VIEWER = 3;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -103,12 +113,13 @@ function cleanName(raw) {
 // ---------- Bilik ----------
 const rooms = new Map();
 
-function newRoomState(code, hostToken) {
+function newRoomState(code, hostToken, creatorIp = null) {
   return {
     code,
+    creatorIp,
     phase: 'lobby', // lobby | question | reveal | final
     hostToken,
-    players: new Map(), // id -> { id, name, score, last }
+    players: new Map(), // id -> { id, name, score, last, ip } (id ialah rahsia peserta)
     qIndex: -1,
     qStart: 0,
     deadline: 0,
@@ -120,12 +131,36 @@ function newRoomState(code, hostToken) {
   };
 }
 
-function createRoom() {
+function clientIp(req) {
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function deleteRoom(room) {
+  clearTimer(room);
+  for (const sub of room.subs) sub.res.end();
+  rooms.delete(room.code);
+}
+
+function createRoom(ip) {
+  if (MAX_ROOMS_PER_IP) {
+    const own = [...rooms.values()]
+      .filter((r) => r.creatorIp === ip)
+      .sort((a, b) => a.lastActive - b.lastActive);
+    if (own.length >= MAX_ROOMS_PER_IP) {
+      // Buang bilik lama milik peranti yang sama jika tiada skrin yang sedang terbuka
+      const idle = own.find((r) => r.subs.size === 0);
+      if (!idle) throw new HttpError(429, 'Terlalu banyak bilik aktif dari peranti ini');
+      deleteRoom(idle);
+    }
+  }
+  if (MAX_ROOMS && rooms.size >= MAX_ROOMS) {
+    throw new HttpError(503, 'Pelayan penuh. Cuba lagi kemudian.');
+  }
   let code;
   do {
     code = String(crypto.randomInt(100000, 1000000));
   } while (rooms.has(code));
-  const room = newRoomState(code, rid(16));
+  const room = newRoomState(code, rid(16), ip);
   rooms.set(code, room);
   persist();
   return room;
@@ -149,12 +184,19 @@ function requirePlayer(room, playerId) {
   return room.players.get(playerId);
 }
 
+// ID peserta ialah kelayakan rahsia: jangan sekali-kali hantar ID peserta lain kepada klien.
+const publicView = (p) => ({ name: p.name, score: p.score });
+
 function publicPlayers(room) {
-  return [...room.players.values()].map((p) => ({ id: p.id, name: p.name, score: p.score }));
+  return [...room.players.values()].map(publicView);
+}
+
+function sortedPlayers(room) {
+  return [...room.players.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }
 
 function ranking(room) {
-  return publicPlayers(room).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return sortedPlayers(room).map(publicView);
 }
 
 // Paparan ikut penonton: pemain tidak nampak jawapan betul sehingga reveal.
@@ -191,7 +233,7 @@ function snapshot(room, sub) {
     const player = room.players.get(sub.playerId);
     if (player) {
       const rank = room.phase === 'reveal' || room.phase === 'final'
-        ? ranking(room).findIndex((p) => p.id === player.id) + 1
+        ? sortedPlayers(room).findIndex((p) => p.id === player.id) + 1
         : null;
       s.you = {
         id: player.id,
@@ -249,14 +291,22 @@ function finish(room) {
   broadcast(room);
 }
 
-function join(room, body) {
+function join(room, body, ip) {
   if (body.playerId && room.players.has(body.playerId)) {
     return room.players.get(body.playerId); // sambung semula
   }
   if (room.phase !== 'lobby') {
     throw new HttpError(409, 'Kuiz sudah bermula. Anda tidak boleh menyertai sekarang.');
   }
-  const player = { id: rid(8), name: cleanName(body.name), score: 0, last: null };
+  if (MAX_PLAYERS && room.players.size >= MAX_PLAYERS) {
+    throw new HttpError(409, 'Bilik sudah penuh');
+  }
+  if (MAX_PLAYERS_PER_IP) {
+    let fromIp = 0;
+    for (const p of room.players.values()) if (p.ip === ip) fromIp++;
+    if (fromIp >= MAX_PLAYERS_PER_IP) throw new HttpError(429, 'Terlalu banyak peserta dari peranti ini');
+  }
+  const player = { id: rid(16), name: cleanName(body.name), score: 0, last: null, ip };
   room.players.set(player.id, player);
   broadcast(room);
   return player;
@@ -320,6 +370,7 @@ function persist() {
 function writeState() {
   const data = [...rooms.values()].map((r) => ({
     code: r.code,
+    creatorIp: r.creatorIp,
     phase: r.phase,
     hostToken: r.hostToken,
     qIndex: r.qIndex,
@@ -351,7 +402,7 @@ function loadState() {
   const now = Date.now();
   for (const d of data) {
     if (now - d.lastActive > ROOM_TTL_MS) continue;
-    const room = newRoomState(d.code, d.hostToken);
+    const room = newRoomState(d.code, d.hostToken, d.creatorIp || null);
     room.qIndex = d.qIndex;
     room.qStart = d.qStart;
     room.deadline = d.deadline;
@@ -378,7 +429,7 @@ function buildCsv(room) {
   QUIZ.questions.forEach((_, i) => header.push(`S${i + 1} jawapan`, `S${i + 1} mata`));
   const rows = [header.map(csvCell).join(',')];
 
-  ranking(room).forEach((p, idx) => {
+  sortedPlayers(room).forEach((p, idx) => {
     const cells = [idx + 1, p.name, p.score];
     QUIZ.questions.forEach((q, i) => {
       const rec = room.responses[i] ? room.responses[i].get(p.id) : null;
@@ -408,6 +459,13 @@ function openStream(room, req, res) {
     'X-Accel-Buffering': 'no',
   });
   res.write(': sambung\n\n');
+  // Had sambungan serentak bagi setiap host/peserta: tutup yang paling lama
+  const same = [...room.subs].filter((s) => s.audience === sub.audience && s.playerId === sub.playerId);
+  while (same.length >= MAX_STREAMS_PER_VIEWER) {
+    const old = same.shift();
+    room.subs.delete(old);
+    old.res.end();
+  }
   room.subs.add(sub);
   sendEvent(res, snapshot(room, sub));
 
@@ -422,7 +480,7 @@ async function handleApi(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', 'rooms', code, action]
 
   if (req.method === 'POST' && url.pathname === '/api/rooms') {
-    const room = createRoom();
+    const room = createRoom(clientIp(req));
     return sendJson(res, 201, {
       code: room.code,
       hostToken: room.hostToken,
@@ -455,7 +513,7 @@ async function handleApi(req, res, url) {
   const body = await readBody(req);
 
   if (action === 'join') {
-    const player = join(room, body);
+    const player = join(room, body, clientIp(req));
     return sendJson(res, 200, { playerId: player.id, name: player.name });
   }
   if (action === 'answer') {
@@ -512,10 +570,9 @@ const server = http.createServer(async (req, res) => {
 setInterval(() => {
   const now = Date.now();
   let changed = false;
-  for (const [code, room] of rooms) {
+  for (const room of rooms.values()) {
     if (room.subs.size === 0 && now - room.lastActive > ROOM_TTL_MS) {
-      clearTimer(room);
-      rooms.delete(code);
+      deleteRoom(room);
       changed = true;
     }
   }

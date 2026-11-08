@@ -59,6 +59,17 @@ Selepas kuiz tamat, host klik **Muat turun keputusan (CSV)**. Fail mengandungi k
 - Token host dan ID peserta dihantar dalam header HTTP, bukan dalam URL.
 - Gunakan dalam rangkaian yang dipercayai sahaja. Jangan dedahkan ke internet tanpa HTTPS dan pengesahan tambahan.
 - Bilik tanpa aktiviti selama 4 jam akan dipadam.
+- ID peserta ialah rahsia peserta itu sahaja. Pelayan tidak menghantar ID peserta lain dalam senarai lobi atau ranking, jadi peserta tidak boleh menjawab bagi pihak orang lain.
+- Had boleh diubah melalui pemboleh ubah persekitaran (`0` = tiada had):
+
+| Pemboleh ubah | Lalai | Maksud |
+|---|---|---|
+| `MAX_ROOMS` | 50 | Jumlah bilik aktif dalam pelayan |
+| `MAX_ROOMS_PER_IP` | 5 | Bilik setiap peranti. Bila dicapai, bilik lama yang tiada skrin terbuka dibuang dahulu |
+| `MAX_PLAYERS` | 100 | Peserta setiap bilik |
+| `MAX_PLAYERS_PER_IP` | 0 (tiada had) | Peserta setiap peranti dalam satu bilik. Cadangan `2` jika setiap telefon ada IP sendiri; biarkan `0` jika peserta berkongsi satu IP (NAT, proksi) |
+
+  Setiap peserta atau host boleh buka maksimum 3 sambungan langsung serentak; yang paling lama akan ditutup.
 
 ## Ujian
 ```bash
