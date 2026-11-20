@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistem Kehadiran</title>
+  <link rel="stylesheet" href="/gaya.css">
+</head>
+<body>
+  <header class="atas"><h1>Sistem Kehadiran</h1></header>
+  <main class="sempit">
+    <div class="kad">
+      <h2>Log masuk</h2>
+      <form id="borang" autocomplete="on">
+        <label for="no">No. pekerja</label>
+        <input id="no" name="username" autocomplete="username" required autocapitalize="characters">
+        <label for="pin">PIN (6 digit)</label>
+        <input id="pin" name="password" type="password" autocomplete="current-password" required>
+        <div id="mesej" class="mesej tersorok"></div>
+        <button type="submit" style="width:100%;margin-top:14px">Log masuk</button>
+      </form>
+      <p class="kecil-teks">Lupa PIN? Hubungi penyelia untuk set semula.</p>
+    </div>
+
+    <div id="kadTukar" class="kad tersorok">
+      <h2>Tukar PIN sementara</h2>
+      <p class="kecil-teks">Ini kali pertama anda log masuk atau PIN telah diset semula. Sila tetapkan PIN 6 digit anda sendiri.</p>
+      <form id="borangTukar">
+        <label for="pinBaru">PIN baharu</label>
+        <input id="pinBaru" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required>
+        <label for="pinUlang">Ulang PIN baharu</label>
+        <input id="pinUlang" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required>
+        <div id="mesejTukar" class="mesej tersorok"></div>
+        <button type="submit" style="width:100%;margin-top:14px">Simpan PIN</button>
+      </form>
+    </div>
+  </main>
+  <script src="/umum.js"></script>
+  <script>
+    let pinSemasa = '';
+    let hasil = null;
+
+    function teruskan(r) {
+      location.href = r.peranan === 'penyelia' && r.admin ? '/penyelia' : '/pegawai';
+    }
+
+    api('/api/saya', { biar401: true }).then((r) => {
+      if (r.pengguna && r.pengguna.tukar_pin) return;
+      teruskan(r);
+    }).catch(() => {});
+
+    $('#borang').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.submitter;
+      btn.disabled = true;
+      papar($('#mesej'), '');
+      try {
+        pinSemasa = $('#pin').value;
+        hasil = await api('/api/log-masuk', { body: { no_pekerja: $('#no').value, pin: pinSemasa }, biar401: true });
+        if (hasil.tukar_pin) {
+          $('#borang').closest('.kad').classList.add('tersorok');
+          $('#kadTukar').classList.remove('tersorok');
+          $('#pinBaru').focus();
+        } else {
+          teruskan(hasil);
+        }
+      } catch (err) {
+        papar($('#mesej'), err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('#borangTukar').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const baru = $('#pinBaru').value;
+      if (baru !== $('#pinUlang').value) return papar($('#mesejTukar'), 'PIN tidak sepadan.');
+      try {
+        await api('/api/tukar-pin', { body: { pin_lama: pinSemasa, pin_baru: baru } });
+        teruskan(hasil);
+      } catch (err) {
+        papar($('#mesejTukar'), err.message);
+      }
+    });
+  </script>
+</body>
+</html>

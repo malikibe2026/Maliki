@@ -1,0 +1,17 @@
+{
+  "name": "sistem-kehadiran",
+  "version": "1.0.0",
+  "description": "Sistem kehadiran pegawai lapangan di Cloudflare Workers + D1.",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply kehadiran-db --local",
+    "db:remote": "wrangler d1 migrations apply kehadiran-db --remote",
+    "deploy": "wrangler deploy",
+    "test": "node test/ujian.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.165.0"
+  },
+  "license": "UNLICENSED"
+}

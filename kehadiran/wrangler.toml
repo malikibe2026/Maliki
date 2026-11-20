@@ -1,0 +1,25 @@
+name = "kehadiran"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kehadiran-db"
+database_id = "f7b37380-295e-42c4-a859-da385c62c857"
+migrations_dir = "migrations"
+
+[vars]
+# Masa daftar masuk selepas ini dikira lewat (waktu Malaysia, HH:MM)
+MASA_LEWAT = "08:30"
+
+[triggers]
+# Bersihkan sesi tamat tempoh setiap hari 3:00 pagi waktu Malaysia (19:00 UTC)
+crons = ["0 19 * * *"]
+
+[observability]
+enabled = true

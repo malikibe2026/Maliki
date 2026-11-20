@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Papan Penyelia</title>
+  <link rel="stylesheet" href="/gaya.css">
+</head>
+<body>
+  <header class="atas">
+    <h1>Papan Penyelia</h1>
+    <div class="kanan">
+      <a id="pautanSaya" href="/pegawai" class="tersorok">Kehadiran saya</a>
+      <button class="pautan" onclick="logKeluar()">Log keluar</button>
+    </div>
+  </header>
+  <main>
+    <nav class="tab">
+      <button data-tab="harian" class="aktif">Kehadiran harian</button>
+      <button data-tab="laporan">Laporan</button>
+      <button data-tab="pegawai">Senarai pegawai</button>
+    </nav>
+    <div id="mesej" class="mesej tersorok"></div>
+
+    <!-- HARIAN -->
+    <section id="tab-harian">
+      <div class="baris-alat">
+        <div><label for="tarikhHarian">Tarikh</label><input type="date" id="tarikhHarian"></div>
+        <div style="flex:0 0 auto"><button class="kedua" id="btnMuatHarian">Muat semula</button></div>
+      </div>
+      <div class="ringkasan" id="ringkasan"></div>
+      <div class="kad">
+        <div class="baris-alat" style="margin-bottom:6px">
+          <div><input id="cariHarian" placeholder="Cari nama / no. pekerja / unit"></div>
+          <div>
+            <select id="tapisHarian">
+              <option value="">Semua</option>
+              <option value="belum">Belum daftar</option>
+              <option value="lewat">Lewat</option>
+              <option value="belumkeluar">Belum daftar keluar</option>
+              <option value="berpunca">Cuti / MC / Kursus</option>
+            </select>
+          </div>
+        </div>
+        <div class="jadual-bungkus">
+          <table class="responsif">
+            <thead><tr><th>Nama</th><th>Unit</th><th>Status</th><th>Masuk</th><th>Keluar</th><th>Lokasi</th><th>Catatan</th><th></th></tr></thead>
+            <tbody id="senaraiHarian"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section id="tab-laporan" class="tersorok">
+      <div class="kad">
+        <div class="baris-alat">
+          <div><label for="dari">Dari</label><input type="date" id="dari"></div>
+          <div><label for="hingga">Hingga</label><input type="date" id="hingga"></div>
+          <div style="flex:0 0 auto;display:flex;gap:8px">
+            <button id="btnLaporan">Papar</button>
+            <button class="kedua" id="btnCsv">Muat turun CSV</button>
+          </div>
+        </div>
+        <div id="ringkasLaporan" class="kecil-teks"></div>
+        <div class="jadual-bungkus">
+          <table class="responsif">
+            <thead><tr><th>Nama</th><th>Unit</th><th>Hari hadir</th><th>Lewat</th><th>Cuti/MC/Kursus</th><th>Purata jam</th></tr></thead>
+            <tbody id="senaraiLaporan"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PEGAWAI -->
+    <section id="tab-pegawai" class="tersorok">
+      <div class="kad">
+        <h2>Tambah pegawai</h2>
+        <form id="borangTambah">
+          <div class="grid2">
+            <div><label for="tNo">No. pekerja</label><input id="tNo" required maxlength="40"></div>
+            <div><label for="tNama">Nama</label><input id="tNama" required maxlength="100"></div>
+            <div><label for="tUnit">Unit / kawasan</label><input id="tUnit" maxlength="60"></div>
+            <div><label for="tPeranan">Peranan</label>
+              <select id="tPeranan"><option value="pegawai">Pegawai</option><option value="penyelia">Penyelia</option></select>
+            </div>
+          </div>
+          <button type="submit" style="margin-top:14px">Tambah</button>
+        </form>
+      </div>
+      <div class="kad">
+        <h2>Senarai pegawai</h2>
+        <div class="jadual-bungkus">
+          <table class="responsif">
+            <thead><tr><th>No. pekerja</th><th>Nama</th><th>Unit</th><th>Peranan</th><th>Status</th><th></th></tr></thead>
+            <tbody id="senaraiPegawai"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dlgPin">
+    <h3>PIN sementara</h3>
+    <p id="dlgPinNama"></p>
+    <div class="pin-paparan" id="dlgPinNilai"></div>
+    <p class="kecil-teks">Berikan PIN ini kepada pegawai secara peribadi. PIN ini hanya dipaparkan sekali. Pegawai akan diminta tukar PIN semasa log masuk pertama.</p>
+    <div class="butang-dialog"><button onclick="this.closest('dialog').close()">Tutup</button></div>
+  </dialog>
+
+  <dialog id="dlgStatus">
+    <h3>Tanda status</h3>
+    <p id="dlgStatusNama"></p>
+    <label for="sStatus">Status</label>
+    <select id="sStatus">
+      <option value="cuti">Cuti</option>
+      <option value="mc">MC</option>
+      <option value="kursus">Kursus / Bengkel</option>
+      <option value="lain">Lain-lain</option>
+      <option value="hadir">Hadir (batal tanda)</option>
+    </select>
+    <label for="sCatatan">Catatan</label>
+    <input id="sCatatan" maxlength="300">
+    <div id="dlgStatusMesej" class="mesej tersorok"></div>
+    <div class="butang-dialog">
+      <button class="kedua" onclick="this.closest('dialog').close()">Batal</button>
+      <button id="btnSimpanStatus">Simpan</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgEdit">
+    <h3>Kemas kini pegawai</h3>
+    <label for="eNama">Nama</label><input id="eNama" maxlength="100">
+    <label for="eUnit">Unit / kawasan</label><input id="eUnit" maxlength="60">
+    <label for="ePeranan">Peranan</label>
+    <select id="ePeranan"><option value="pegawai">Pegawai</option><option value="penyelia">Penyelia</option></select>
+    <div id="dlgEditMesej" class="mesej tersorok"></div>
+    <div class="butang-dialog">
+      <button class="kedua" onclick="this.closest('dialog').close()">Batal</button>
+      <button id="btnSimpanEdit">Simpan</button>
+    </div>
+  </dialog>
+
+  <script src="/umum.js"></script>
+  <script>
+    let harian = null;
+    let pegawai = [];
+    let sasaranStatus = null;
+    let sasaranEdit = null;
+    const mesej = $('#mesej');
+
+    function hariIniMYT() {
+      return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+    }
+
+    // ---------- Tab ----------
+    document.querySelectorAll('.tab button').forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll('.tab button').forEach((x) => x.classList.toggle('aktif', x === b));
+        document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('tersorok', s.id !== 'tab-' + b.dataset.tab));
+        papar(mesej, '');
+        if (b.dataset.tab === 'pegawai') muatPegawai();
+      };
+    });
+
+    // ---------- Harian ----------
+    async function muatHarian() {
+      try {
+        harian = await api('/api/admin/harian?tarikh=' + $('#tarikhHarian').value);
+        const r = harian.ringkasan;
+        $('#ringkasan').innerHTML = [
+          ['Jumlah pegawai', r.jumlah],
+          ['Hadir', r.hadir],
+          [`Lewat (selepas ${harian.masa_lewat})`, r.lewat],
+          ['Cuti / MC / Kursus', r.tidak_hadir_berpunca],
+          ['Belum daftar', r.belum_daftar],
+          ['Belum daftar keluar', r.belum_keluar],
+        ].map(([l, n]) => `<div><small>${esc(l)}</small><strong>${n}</strong></div>`).join('');
+        paparHarian();
+      } catch (e) {
+        papar(mesej, e.message);
+      }
+    }
+
+    function paparHarian() {
+      const cari = $('#cariHarian').value.toLowerCase();
+      const tapis = $('#tapisHarian').value;
+      const baris = harian.senarai.filter((p) => {
+        const k = p.rekod;
+        if (cari && !`${p.nama} ${p.no_pekerja} ${p.unit}`.toLowerCase().includes(cari)) return false;
+        if (tapis === 'belum') return !k || (k.status === 'hadir' && !k.masuk);
+        if (tapis === 'lewat') return k && k.status === 'hadir' && k.lewat_minit > 0;
+        if (tapis === 'belumkeluar') return k && k.masuk && !k.keluar;
+        if (tapis === 'berpunca') return k && k.status !== 'hadir';
+        return true;
+      });
+      $('#senaraiHarian').innerHTML = baris.length ? baris.map((p) => {
+        const k = p.rekod;
+        const catatan = [k?.masuk_catatan, k?.keluar_catatan && 'Keluar: ' + k.keluar_catatan, k?.catatan_penyelia && 'Penyelia: ' + k.catatan_penyelia]
+          .filter(Boolean).map(esc).join('<br>');
+        return `<tr>
+          <td data-label="Nama"><strong>${esc(p.nama)}</strong><br><span class="kecil-teks">${esc(p.no_pekerja)}</span></td>
+          <td data-label="Unit">${esc(p.unit || '-')}</td>
+          <td data-label="Status">${lencanaStatus(k)}</td>
+          <td data-label="Masuk">${esc(k?.masuk || '-')}</td>
+          <td data-label="Keluar">${esc(k?.keluar || '-')}</td>
+          <td data-label="Lokasi">${k?.masuk_lokasi ? 'M: ' + pautanPeta(k.masuk_lokasi) : '-'}${k?.keluar_lokasi ? '<br>K: ' + pautanPeta(k.keluar_lokasi) : ''}</td>
+          <td data-label="Catatan" class="kecil">${catatan || '-'}</td>
+          <td data-label=""><button class="kedua kecil" data-status="${p.pengguna_id}">Tanda status</button></td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="8" class="kecil">Tiada rekod.</td></tr>';
+    }
+
+    $('#senaraiHarian').addEventListener('click', (e) => {
+      const id = e.target.dataset.status;
+      if (!id) return;
+      sasaranStatus = harian.senarai.find((p) => String(p.pengguna_id) === id);
+      $('#dlgStatusNama').textContent = `${sasaranStatus.nama} — ${tarikhPanjang(harian.tarikh)}`;
+      $('#sStatus').value = sasaranStatus.rekod && sasaranStatus.rekod.status !== 'hadir' ? sasaranStatus.rekod.status : 'cuti';
+      $('#sCatatan').value = sasaranStatus.rekod?.catatan_penyelia || '';
+      papar($('#dlgStatusMesej'), '');
+      $('#dlgStatus').showModal();
+    });
+
+    $('#btnSimpanStatus').onclick = async () => {
+      try {
+        await api('/api/admin/status', {
+          body: { pengguna_id: sasaranStatus.pengguna_id, tarikh: harian.tarikh, status: $('#sStatus').value, catatan: $('#sCatatan').value },
+        });
+        $('#dlgStatus').close();
+        muatHarian();
+      } catch (e) {
+        papar($('#dlgStatusMesej'), e.message);
+      }
+    };
+
+    $('#tarikhHarian').onchange = muatHarian;
+    $('#btnMuatHarian').onclick = muatHarian;
+    $('#cariHarian').oninput = paparHarian;
+    $('#tapisHarian').onchange = paparHarian;
+
+    // ---------- Laporan ----------
+    $('#btnLaporan').onclick = async () => {
+      papar(mesej, '');
+      try {
+        const d = await api(`/api/admin/laporan?dari=${$('#dari').value}&hingga=${$('#hingga').value}`);
+        const ikut = new Map();
+        for (const r of d.rekod) {
+          const x = ikut.get(r.no_pekerja) || { nama: r.nama, unit: r.unit, hadir: 0, lewat: 0, berpunca: 0, jam: 0, nJam: 0 };
+          if (r.status === 'hadir' && r.masuk) {
+            x.hadir++;
+            if (r.lewat_minit > 0) x.lewat++;
+            if (r.jam_bekerja != null) { x.jam += r.jam_bekerja; x.nJam++; }
+          } else if (r.status !== 'hadir') x.berpunca++;
+          ikut.set(r.no_pekerja, x);
+        }
+        $('#ringkasLaporan').textContent = `${d.rekod.length} rekod dari ${d.dari} hingga ${d.hingga}.`;
+        const senarai = [...ikut.values()].sort((a, b) => (a.unit + a.nama).localeCompare(b.unit + b.nama));
+        $('#senaraiLaporan').innerHTML = senarai.length ? senarai.map((x) => `<tr>
+          <td data-label="Nama">${esc(x.nama)}</td><td data-label="Unit">${esc(x.unit || '-')}</td>
+          <td data-label="Hari hadir">${x.hadir}</td><td data-label="Lewat">${x.lewat}</td>
+          <td data-label="Cuti/MC/Kursus">${x.berpunca}</td>
+          <td data-label="Purata jam">${x.nJam ? (x.jam / x.nJam).toFixed(1) : '-'}</td></tr>`).join('')
+          : '<tr><td colspan="6" class="kecil">Tiada rekod dalam julat ini.</td></tr>';
+      } catch (e) {
+        papar(mesej, e.message);
+      }
+    };
+    $('#btnCsv').onclick = () => {
+      location.href = `/api/admin/laporan?format=csv&dari=${$('#dari').value}&hingga=${$('#hingga').value}`;
+    };
+
+    // ---------- Pegawai ----------
+    async function muatPegawai() {
+      try {
+        pegawai = (await api('/api/admin/pengguna')).pengguna;
+        $('#senaraiPegawai').innerHTML = pegawai.length ? pegawai.map((p) => `<tr class="${p.aktif ? '' : 'tak-aktif'}">
+          <td data-label="No. pekerja">${esc(p.no_pekerja)}</td>
+          <td data-label="Nama">${esc(p.nama)}</td>
+          <td data-label="Unit">${esc(p.unit || '-')}</td>
+          <td data-label="Peranan">${p.peranan === 'penyelia' ? 'Penyelia' : 'Pegawai'}</td>
+          <td data-label="Status">${p.aktif ? (p.tukar_pin ? '<span class="lencana lewat">Belum tukar PIN</span>' : '<span class="lencana hadir">Aktif</span>') : '<span class="lencana kelabu">Tidak aktif</span>'}</td>
+          <td data-label="" style="white-space:nowrap">
+            <button class="kedua kecil" data-tindakan="edit" data-id="${p.id}">Ubah</button>
+            <button class="kedua kecil" data-tindakan="pin" data-id="${p.id}">Set semula PIN</button>
+            <button class="kedua kecil" data-tindakan="aktif" data-id="${p.id}">${p.aktif ? 'Nyahaktif' : 'Aktifkan'}</button>
+          </td></tr>`).join('') : '<tr><td colspan="6" class="kecil">Belum ada pegawai. Tambah di atas.</td></tr>';
+      } catch (e) {
+        papar(mesej, e.message);
+      }
+    }
+
+    function tunjukPin(nama, pin) {
+      $('#dlgPinNama').textContent = nama;
+      $('#dlgPinNilai').textContent = pin;
+      $('#dlgPin').showModal();
+    }
+
+    $('#borangTambah').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      papar(mesej, '');
+      try {
+        const nama = $('#tNama').value;
+        const r = await api('/api/admin/pengguna', {
+          body: { no_pekerja: $('#tNo').value, nama, unit: $('#tUnit').value, peranan: $('#tPeranan').value },
+        });
+        e.target.reset();
+        tunjukPin(nama, r.pin_sementara);
+        muatPegawai();
+      } catch (err) {
+        papar(mesej, err.message);
+      }
+    });
+
+    $('#senaraiPegawai').addEventListener('click', async (e) => {
+      const { tindakan, id } = e.target.dataset;
+      if (!tindakan) return;
+      const p = pegawai.find((x) => String(x.id) === id);
+      papar(mesej, '');
+      try {
+        if (tindakan === 'pin') {
+          if (!confirm(`Set semula PIN untuk ${p.nama}? PIN lama tidak boleh digunakan lagi.`)) return;
+          const r = await api(`/api/admin/pengguna/${id}/reset-pin`, { body: {} });
+          tunjukPin(p.nama, r.pin_sementara);
+        } else if (tindakan === 'aktif') {
+          if (p.aktif && !confirm(`Nyahaktif ${p.nama}? Pegawai tidak boleh log masuk lagi. Rekod lama kekal.`)) return;
+          await api(`/api/admin/pengguna/${id}`, { body: { aktif: !p.aktif } });
+        } else if (tindakan === 'edit') {
+          sasaranEdit = p;
+          $('#eNama').value = p.nama;
+          $('#eUnit').value = p.unit;
+          $('#ePeranan').value = p.peranan;
+          papar($('#dlgEditMesej'), '');
+          $('#dlgEdit').showModal();
+          return;
+        }
+        muatPegawai();
+      } catch (err) {
+        papar(mesej, err.message);
+      }
+    });
+
+    $('#btnSimpanEdit').onclick = async () => {
+      try {
+        await api(`/api/admin/pengguna/${sasaranEdit.id}`, {
+          body: { nama: $('#eNama').value, unit: $('#eUnit').value, peranan: $('#ePeranan').value },
+        });
+        $('#dlgEdit').close();
+        muatPegawai();
+      } catch (e) {
+        papar($('#dlgEditMesej'), e.message);
+      }
+    };
+
+    // ---------- Mula ----------
+    (async () => {
+      const saya = await api('/api/saya');
+      if (saya.peranan !== 'penyelia') return (location.href = '/pegawai');
+      if (saya.pengguna && saya.pengguna.tukar_pin) return (location.href = '/');
+      $('#pautanSaya').classList.toggle('tersorok', saya.admin);
+      const hari = hariIniMYT();
+      $('#tarikhHarian').value = hari;
+      $('#hingga').value = hari;
+      $('#dari').value = hari.slice(0, 8) + '01';
+      muatHarian();
+    })().catch((e) => papar(mesej, e.message));
+  </script>
+</body>
+</html>

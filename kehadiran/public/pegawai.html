@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kehadiran Saya</title>
+  <link rel="stylesheet" href="/gaya.css">
+</head>
+<body>
+  <header class="atas">
+    <h1>Kehadiran Saya</h1>
+    <div class="kanan">
+      <a id="pautanPenyelia" href="/penyelia" class="tersorok">Papan Penyelia</a>
+      <button class="pautan" onclick="logKeluar()">Log keluar</button>
+    </div>
+  </header>
+  <main class="sempit">
+    <div class="kad">
+      <div id="nama" style="font-weight:600"></div>
+      <div id="unit" class="kecil-teks"></div>
+    </div>
+
+    <div class="kad">
+      <div class="jam" id="jam">--:--:--</div>
+      <div class="tarikh-besar" id="tarikh"></div>
+      <div class="status-hari">
+        <div><small>Masuk</small><strong id="masuk">--:--</strong></div>
+        <div><small>Keluar</small><strong id="keluar">--:--</strong></div>
+      </div>
+      <div id="statusHari" style="text-align:center;margin-bottom:10px"></div>
+
+      <label for="catatan">Catatan / lokasi tugasan (pilihan)</label>
+      <input id="catatan" maxlength="300" placeholder="cth: Blok 12, Taman Seri">
+      <div id="mesej" class="mesej tersorok"></div>
+      <button id="btnMasuk" class="besar hijau" style="margin-top:12px">Daftar Masuk</button>
+      <button id="btnKeluar" class="besar merah tersorok" style="margin-top:12px">Daftar Keluar</button>
+      <p class="kecil-teks" style="text-align:center">Masa dan lokasi GPS direkod semasa butang ditekan.</p>
+    </div>
+
+    <div class="kad">
+      <h2>Rekod 31 hari terakhir</h2>
+      <div class="jadual-bungkus">
+        <table class="responsif">
+          <thead><tr><th>Tarikh</th><th>Status</th><th>Masuk</th><th>Keluar</th><th>Jam</th></tr></thead>
+          <tbody id="sejarah"><tr><td colspan="5" class="kecil">Memuatkan…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <script src="/umum.js"></script>
+  <script>
+    let data = null;
+
+    function detik() {
+      $('#jam').textContent = new Date().toLocaleTimeString('ms-MY', { hour12: false, timeZone: 'Asia/Kuala_Lumpur' });
+    }
+    setInterval(detik, 1000);
+    detik();
+
+    function paparHariIni() {
+      const r = data.hari_ini;
+      $('#masuk').textContent = r?.masuk || '--:--';
+      $('#keluar').textContent = r?.keluar || '--:--';
+      $('#statusHari').innerHTML = r && r.masuk ? lencanaStatus(r) : r ? lencanaStatus(r) : '';
+      const bolehMasuk = !r;
+      const bolehKeluar = r && r.masuk && !r.keluar;
+      $('#btnMasuk').classList.toggle('tersorok', !bolehMasuk);
+      $('#btnKeluar').classList.toggle('tersorok', !bolehKeluar);
+      $('#catatan').closest('.kad').querySelector('label').classList.toggle('tersorok', !bolehMasuk && !bolehKeluar);
+      $('#catatan').classList.toggle('tersorok', !bolehMasuk && !bolehKeluar);
+      if (r && r.keluar) papar($('#mesej'), `Kehadiran hari ini lengkap. Jumlah ${r.jam_bekerja} jam.`, 'ok');
+      else if (r && r.status !== 'hadir') papar($('#mesej'), `Hari ini ditanda ${r.status.toUpperCase()} oleh penyelia.`, 'info');
+    }
+
+    async function muat() {
+      data = await api('/api/saya');
+      if (data.admin) return (location.href = '/penyelia');
+      if (data.pengguna.tukar_pin) return (location.href = '/');
+      $('#nama').textContent = `${data.pengguna.nama} (${data.pengguna.no_pekerja})`;
+      $('#unit').textContent = data.pengguna.unit;
+      $('#tarikh').textContent = tarikhPanjang(data.tarikh);
+      $('#pautanPenyelia').classList.toggle('tersorok', data.peranan !== 'penyelia');
+      paparHariIni();
+      muatSejarah();
+    }
+
+    async function muatSejarah() {
+      const { rekod } = await api('/api/sejarah');
+      $('#sejarah').innerHTML = rekod.length
+        ? rekod.map((r) => `<tr>
+            <td data-label="Tarikh">${esc(r.tarikh)}</td>
+            <td data-label="Status">${lencanaStatus(r)}</td>
+            <td data-label="Masuk">${esc(r.masuk || '-')}</td>
+            <td data-label="Keluar">${esc(r.keluar || '-')}</td>
+            <td data-label="Jam">${r.jam_bekerja ?? '-'}</td></tr>`).join('')
+        : '<tr><td colspan="5" class="kecil">Tiada rekod lagi.</td></tr>';
+    }
+
+    async function daftar(jenis, btn) {
+      if (jenis === 'keluar' && !confirm('Sahkan daftar keluar sekarang?')) return;
+      btn.disabled = true;
+      const asal = btn.textContent;
+      btn.textContent = 'Mengesan lokasi…';
+      papar($('#mesej'), '');
+      try {
+        const lok = await dapatkanLokasi();
+        btn.textContent = 'Menghantar…';
+        const r = await api('/api/daftar-' + jenis, { body: { ...lok, catatan: $('#catatan').value } });
+        data.hari_ini = r.rekod;
+        $('#catatan').value = '';
+        paparHariIni();
+        if (!r.rekod.keluar) papar($('#mesej'), `Daftar ${jenis} berjaya pada ${r.rekod[jenis]}.`, 'ok');
+        muatSejarah();
+      } catch (e) {
+        papar($('#mesej'), e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = asal;
+      }
+    }
+
+    $('#btnMasuk').onclick = (e) => daftar('masuk', e.currentTarget);
+    $('#btnKeluar').onclick = (e) => daftar('keluar', e.currentTarget);
+    muat().catch((e) => papar($('#mesej'), e.message));
+  </script>
+</body>
+</html>
